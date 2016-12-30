@@ -1,91 +1,77 @@
-import numpy as np
+# -*- coding: utf-8 -*-
+# import the necessary packages
+import imutils
+import sys
 import cv2
-import random
 import time
-from scipy.ndimage import label
 
+print("Python Version: {0}".format(sys.version))
 print("OpenCV Version: {0}".format(cv2.__version__))
 
-#input source(s)
-''' ============================================================== '''
-video_input = cv2.VideoCapture('test-materials/simple-squares.mp4')
-time.sleep(2)
-#after = cv2.VideoCapture('test-materials/after-powder.avi')
-#cap = cv2.VideoCapture(0)
-#img = cv2.imread('launch-still-edit.png',-1)
-#fbgb = cv2.createBackgroundSubtractorMOG2()
-''' ============================================================== '''
+# Video input source(s)
+# ==============================================================
+# Comment out if not doing a video capture test
+cap = cv2.VideoCapture('test-materials/simple-squares.mp4')
+# ==============================================================
 
-# Function that will take a capture and return a contour mapping of that capture. Applies a gaussian blur to image before conversion to cut down on noise
-def prepare_frame(frame):
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5,5), 0)
-    thresh = cv2.threshold(blurred, 60, 255, cv2.THRESH_BINARY)[1]
-    return thresh
+#Color 1(Blue)   –  BGR(91,32,0)      HSV(219,100,35.7)      Pantone = 281C
+#Color 2(Yellow) –  BGR(0,209,255)    HSV(49,100,100)        Pantone = 109C
+#Color 3(Red)    –  BGR(61,9,166)     HSV(340,94.6,65.1)     Pantone = 1945C
 
 
-def is_square(c):
-    peri = cv2.arcLength(c, True)
-    approx = cv2.aproxPolyDP(c, 0.04 * peri, True)
-    
-    if len(approx) == 4:
-        #(x, y, w, h) = cv2.boundingRect(approx)
-        return True
-    else:
-        return False
-
-    
 while(True):
-    _, frame = video_input.read()
-    
-    test_frame = prepare_frame(frame)
-    contours = cv2.findContours(test_frame, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
-    
-    # Checks each shape created by contour view 
-    for c in contours:
-        print(c)
-        M = cv2.moments(c)
-        # Find center of
-        #cX = int(M["m10"] / M["m00"])
-        #cY = int(M["m01"] / M["m00"])
-        if(is_square(c)):
-            c = c.astype("int")
-            cv2.drawContours(image, [c], -1, (0,255,0), 2)
-    
-    cv2.imshow("original", frame)
-    cv2.imshow("test", image)
-    
-    '''
-    _, b_frame = before.read()
-    _, a_frame = after.read()
-    
-    b_edges = create_contour_map(b_frame)
-    a_edges = create_contour_map(a_frame)
+    color_ranges = [
+        ((110,50,50),(130,255,255), ". Blue"),
+        ((20,100,100),(60,255,255),". Yellow"),
+        ((60,255,255),(179,255,255),". Red")]
 
-
-    cv2.imshow('Before -- Edge',b_edges)
-    cv2.imshow('Before -- Source',b_frame)
+    # load the image and resize it to a smaller factor so that
+    # the shapes can be approximated better
     
-    cv2.imshow('After -- Edge',a_edges)
-    cv2.imshow('After -- Source',a_frame)
-    '''
+    # Use this if interpreting stills
+    #image = cv2.VideoCapture('test-materials/simple-squares.mp4')
+    
+    # Use this if interpreting video
+    _,image = cap.read() 
+    
+    # blur image slightly to consolidate colors
+    image = imutils.resize(image, 600)
+    blurred = cv2.GaussianBlur(image, (11,11), 0)
+    #cv2.imshow("blurred", blurred)
+
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    # loop over colors
+    for (lower, upper, colorName) in color_ranges:
+        mask = cv2.inRange(hsv, lower, upper)
+        mask = cv2.erode(mask, None, iterations=2)
+        mask = cv2.dilate(mask, None, iterations=2)
+        
+        # find contours
+        (_, cnts, _) = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if len(cnts) > 0:
+            c = max(cnts, key=cv2.contourArea)
+            rect = cv2.boundingRect(c)
+            x, y, w, h = rect
+            # compute the center of the contour
+            M = cv2.moments(c)
+            cX = int((M["m10"] / M["m00"]))
+            cY = int((M["m01"] / M["m00"]))
+
+            #if size is within tolerance
+            cv2.rectangle(image, (x,y), (x+w,y+h), (0,255,0),2)
+            cv2.putText(image, colorName, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+        # show the output image
+        cv2.imshow("Image", image)
+        
     k = cv2.waitKey(30) & 0xFF
     if k == 27:
         break
+        
+cv2.destroyAllWindows()
 
-# Use with live feed
+# Use with live feed/Video
 #cap.release()
 
 cv2.destroyAllWindows()
-
-
-'''
-    Pull video frame/still from PiCamera module.
-    Convert a binary image from source frame
-    square detection on binary image
-    Using np coords from square detection, apply color mask to source frame ONLY at those coords
-    IF mask colors found in coords, return success(color)
-'''
-
-
-
