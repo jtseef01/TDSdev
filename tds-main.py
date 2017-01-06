@@ -4,7 +4,8 @@ import imutils
 import sys
 import cv2
 import time
-
+import copy
+import os.path
 # ==============================================================
 # Define color ranges for color recognition... in HSV
 #
@@ -13,16 +14,16 @@ import time
 # Color 3(Red)    –  BGR(61,9,166)     HSV(165,94.6,65.1)     Pantone = 1945C
 # ==============================================================
 color_ranges = [
-		((100,50,50),(130,255,255), "Blue"),
-		((20,100,100),(40,255,255),"Yellow"),
-		((150,100,100),(180,255,255),"Red")]
+		((100,50,50),(130,255,255), "b"),
+		((20,100,100),(40,255,255),"y"),
+		((150,100,100),(180,255,255),"r")]
 
 # ==============================================================
 # Get still from pi cam and return
 # Currently a STUB
 # ==============================================================
 def get_still():
-	return cv2.imread('test-materials/shapes_and_colors.jpg') 
+	return cv2.imread('test-materials/test-footage-still.JPG') 
 
 def get_candidates(mask):
 	candidates = []
@@ -30,25 +31,49 @@ def get_candidates(mask):
 	# find contours
 	(_, cnts, _) = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	
+	# continue at least 1 contour found
 	if(len(cnts) > 0):
-		
 		for cnt in cnts:
-			peri = cv2.arcLength(cnt, True)
-			approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+			# approximate number of data points in contour with epsilon = 10%
+			shape = cv2.approxPolyDP(cnt, 10, True)
 			
-			if(len(approx) == 4):
-				(x, y, w, h) = cv2.boundingRect(approx)
-				ar = w / float(h)
+			# check if shape has 4 data points (square/rectangle)
+			if(len(shape) == 4):
+				# calculate bounding rectangle for figure
+				(x, y, w, h) = cv2.boundingRect(shape)
 				
-				if(ar >= .95 and ar <= 1.05):
+				# compute aspect ratio
+				ratio = w / float(h)
+				
+				# assume square if aspect ratio is within 80% - 120%
+				if(ar >= .8 and ar <= 1.2):
 					candidates.append(cnt)
 	
 	return candidates
 
+# stub: need to do physics stuff
 def verify_candidates(candidates):
-	return candidates
+	return candidates[0]
 
-def object_detect(): 
+def check_targets_found():
+	color_string = 'bry'
+	found = {}
+	
+	# see if image already exists for target
+	for color in color_string:
+		# if image exists, mark as found
+		if(os.path.isfile(color + '_found.jpg')):
+			found[color] = True 
+		# otherwise, mark as false
+		else:
+			found[color] = False
+			
+	return found
+
+def object_detect():
+	# check which targets already found/set others to false 
+	found = check_targets_found()
+	
 	# first, get image to process
 	image = get_still()
 	
@@ -56,35 +81,45 @@ def object_detect():
 	image = imutils.resize(image, 1200) 
 	blurred = cv2.GaussianBlur(image, (11,11), 0)
 	hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-	
-	# loop over colors
+
 	for (lower, upper, color_name) in color_ranges:
+		# skip if this color already found 
+		if(found[color_name] is True):
+			continue
+		
+		# mask image based on HSV color range
 		mask = cv2.inRange(hsv, lower, upper)
+		
+		# remove any blobs in the image
 		mask = cv2.erode(mask, None, iterations=2)
 		mask = cv2.dilate(mask, None, iterations = 2) 
 		
+		# get square candidates
 		candidates = get_candidates(mask) 
 		
-		detected = verify_candidates(candidates) 
+		# verify which square (if any) is a target
+		target = verify_candidates(candidates) 
 		
-		for target in detected:
-			print 'here', color_name
-			rect = cv2.boundingRect(target)
-			x, y, w, h = rect
+		# mark image and save if target founf
+		if(target is not None):
+			found[color_name] = True
+			 
 			# compute the center of the contour
 			M = cv2.moments(target)
 			cX = int((M["m10"] / M["m00"]))
 			cY = int((M["m01"] / M["m00"]))
-
-			#if size is within tolerance
-			cv2.rectangle(image, (x,y), (x+w,y+h), (0,255,0),2)
-			cv2.putText(image, color_name, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
 			
-	cv2.imshow("Test Window", image)
+			# save copy of image with target detected
+			tmp_image = copy.deepcopy(image) 
+			cv2.drawContours(tmp_image, [target], -1, (0, 255, 0), 2)
+			cv2.putText(tmp_image, color_name, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+			
+			cv2.imwrite(color_name + '_found.jpg', tmp_image) 
+	
+	return found['b'], found['r'], found['y']
 
 def main():
-	object_detect()
-	raw_input()
+	l = object_detect()
 	cv2.destroyAllWindows()
 
 if __name__ == "__main__":
