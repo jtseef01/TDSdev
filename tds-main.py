@@ -28,7 +28,9 @@ import cv2
 import time
 import copy
 import os.path
+import picamera 
 
+CONV = 0.00391140278963
 # Define color ranges for color recognition... in HSV
 color_ranges = [
 		((100,50,50),(130,255,255), "b"),
@@ -40,7 +42,19 @@ color_ranges = [
 # Currently a STUB
 # ==============================================================
 def getStill():
-	return cv2.imread('test-materials/test-footage-still.JPG') 
+    # open new pi cam instant
+	camera = picamera.PiCamera()
+    
+    # get picture
+    camera.capture('images/still.jpg')
+    
+    # release resources
+    camera.close()
+    
+    return cv2.imread('images/still.jpg')
+    
+    # use this if testing on laptop
+    #return cv2.imread('test-materials/test4.png') 
 
 def getCandidates(mask):
 	candidates = []
@@ -63,14 +77,23 @@ def getCandidates(mask):
 				ratio = w / float(h)
 				
 				# assume square if aspect ratio is within 80% - 120%
-				if(ratio >= .8 and ratio <= 1.2):
+				if(ratio >= .9 and ratio <= 1.1):
 					candidates.append(cnt)
 	
 	return candidates
 
-# stub: need to do physics stuff
+# stub: need to do physics stuff]
+# update: is this shit even possible? 
 def verifyCandidates(candidates):
-	return candidates[0]
+    rect = cv2.minAreaRect(candidates[0])
+
+    w, h = rect[1]
+    avg = (w + h) / 2.0
+
+    f = (avg * 37) / 2.3
+     
+    print f
+    return candidates[0]
 
 def checkTargetsFound():
 	color_string = 'bry'
@@ -79,7 +102,7 @@ def checkTargetsFound():
 	# see if image already exists for target
 	for color in color_string:
 		# if image exists, mark as found
-		if(os.path.isfile(color + '_found.jpg')):
+		if(os.path.isfile('images/' + color + '_found.jpg')):
 			found[color] = True 
 		# otherwise, mark as false
 		else:
@@ -89,55 +112,58 @@ def checkTargetsFound():
 
 def objectDetect():
 	# check which targets already found/set others to false 
-	found = checkTargetsFound()
+    found = checkTargetsFound()
 	
 	# first, get image to process
-	image = getStill()
+    image = getStill()
 	
 	# resize, blur, and convert to hsv color space
-	image = imutils.resize(image, 1200) 
-	blurred = cv2.GaussianBlur(image, (11,11), 0)
-	hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+    image = imutils.resize(image, 1200) 
+    blurred = cv2.GaussianBlur(image, (11,11), 0)
+    hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
-	for (lower, upper, color_name) in color_ranges:
+    for (lower, upper, color_name) in color_ranges:
 		# skip if this color already found 
-		if(found[color_name] is True):
-			continue
+        if(found[color_name] is True):
+            continue
 		
 		# mask image based on HSV color range
-		mask = cv2.inRange(hsv, lower, upper)
+        mask = cv2.inRange(hsv, lower, upper)
 		
 		# remove any blobs in the image
-		mask = cv2.erode(mask, None, iterations=2)
-		mask = cv2.dilate(mask, None, iterations = 2) 
+        mask = cv2.erode(mask, None, iterations=2)
+        mask = cv2.dilate(mask, None, iterations = 2) 
 		
 		# get square candidates
-		candidates = getCandidates(mask) 
+        candidates = getCandidates(mask)
+        
+        if(len(candidates) == 0):
+            continue
 		
 		# verify which square (if any) is a target
-		target = verifyCandidates(candidates) 
-		
+        target = verifyCandidates(candidates)
+        
 		# mark image and save if target founf
-		if(target is not None):
-			found[color_name] = True
+        if(target is not None):
+            found[color_name] = True
 			 
-			# compute the center of the contour
-			M = cv2.moments(target)
-			cX = int((M["m10"] / M["m00"]))
-			cY = int((M["m01"] / M["m00"]))
+		    # compute the center of the contour
+            M = cv2.moments(target)
+            cX = int((M["m10"] / M["m00"]))
+            cY = int((M["m01"] / M["m00"]))
 			
-			# save copy of image with target detected
-			tmp_image = copy.deepcopy(image) 
-			cv2.drawContours(tmp_image, [target], -1, (0, 255, 0), 2)
-			cv2.putText(tmp_image, color_name, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-			
-			cv2.imwrite(color_name + '_found.jpg', tmp_image) 
+		    # save copy of image with target detected
+            tmp_image = copy.deepcopy(image) 
+            cv2.drawContours(tmp_image, [target], -1, (0, 255, 0), 2)
+            cv2.putText(tmp_image, color_name, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+		
+            cv2.imwrite('images/' + color_name + '_found.jpg', tmp_image) 
 	
-	return found['b'], found['r'], found['y']
+    return found['b'], found['r'], found['y']
 
 def main():
-	l = objectDetect()
-	cv2.destroyAllWindows()
+    l = objectDetect()
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-	main() 
+    main() 
