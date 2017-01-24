@@ -27,72 +27,65 @@ import sys
 import cv2
 import time
 import copy
-import os.path
-import picamera 
+import os
+#import picamera 
 
-CONV = 0.00391140278963
 # Define color ranges for color recognition... in HSV
 color_ranges = [
-		((100,50,50),(130,255,255), "b"),
-		((20,100,100),(40,255,255),"y"),
+		((100,100,100),(130,255,255), "b"),
+		((25,10,200),(100,100,255),"y"),
 		((150,100,100),(180,255,255),"r")]
 
 # ==============================================================
 # Get still from pi cam and return
 # Currently a STUB
 # ==============================================================
-def getStill():
-    # open new pi cam instant
-	camera = picamera.PiCamera()
+def getStill(path = None):
+    if(path is None):
+        # open new pi cam instant
+        camera = picamera.PiCamera()
     
-    # get picture
-    camera.capture('images/still.jpg')
+        # get picture
+        camera.capture('images/still.jpg')
     
-    # release resources
-    camera.close()
+        #release resources
+        camera.close()
     
-    return cv2.imread('images/still.jpg')
-    
-    # use this if testing on laptop
-    #return cv2.imread('test-materials/test4.png') 
+        return cv2.imread('images/still.jpg')
+        
+    else:
+        # use this if testing on laptop
+        return cv2.imread(path) 
 
 def getCandidates(mask):
-	candidates = []
+    candidates = []
 	
-	# find contours
-	(_, cnts, _) = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # find contours
+    (_, cnts, _) = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	
-	# continue at least 1 contour found
-	if(len(cnts) > 0):
-		for cnt in cnts:
+    # continue at least 1 contour found
+    if(len(cnts) > 0):
+        for cnt in cnts:
 			# approximate number of data points in contour with epsilon = 10%
-			shape = cv2.approxPolyDP(cnt, 10, True)
+            shape = cv2.approxPolyDP(cnt, 15, True)
 			
-			# check if shape has 4 data points (square/rectangle)
-			if(len(shape) == 4):
+    		# check if shape has 4 data points (square/rectangle)
+            if(len(shape) == 4):
 				# calculate bounding rectangle for figure
-				(x, y, w, h) = cv2.boundingRect(shape)
+                (x, y, w, h) = cv2.boundingRect(shape)
 				
 				# compute aspect ratio
-				ratio = w / float(h)
+                ratio = w / float(h)
 				
 				# assume square if aspect ratio is within 80% - 120%
-				if(ratio >= .9 and ratio <= 1.1):
-					candidates.append(cnt)
+                if(ratio >= .85 and ratio <= 1.15):
+                    candidates.append(cnt)
 	
-	return candidates
+    return candidates
 
 # stub: need to do physics stuff]
 # update: is this shit even possible? 
 def verifyCandidates(candidates):
-    rect = cv2.minAreaRect(candidates[0])
-
-    w, h = rect[1]
-    avg = (w + h) / 2.0
-
-    f = (avg * 37) / 2.3
-     
-    print f
     return candidates[0]
 
 def checkTargetsFound():
@@ -102,7 +95,7 @@ def checkTargetsFound():
 	# see if image already exists for target
 	for color in color_string:
 		# if image exists, mark as found
-		if(os.path.isfile('images/' + color + '_found.jpg')):
+		if(os.path.isfile('./detected/' + color + '_found.jpg')):
 			found[color] = True 
 		# otherwise, mark as false
 		else:
@@ -110,12 +103,12 @@ def checkTargetsFound():
 			
 	return found
 
-def objectDetect():
+def objectDetect(path = None):
 	# check which targets already found/set others to false 
     found = checkTargetsFound()
 	
 	# first, get image to process
-    image = getStill()
+    image = getStill(path)
 	
 	# resize, blur, and convert to hsv color space
     image = imutils.resize(image, 1200) 
@@ -125,29 +118,28 @@ def objectDetect():
     for (lower, upper, color_name) in color_ranges:
 		# skip if this color already found 
         if(found[color_name] is True):
+            
             continue
 		
-		# mask image based on HSV color range
+        # mask image based on HSV color range
         mask = cv2.inRange(hsv, lower, upper)
-		
-		# remove any blobs in the image
+     
+        # remove any blobs in the image
         mask = cv2.erode(mask, None, iterations=2)
         mask = cv2.dilate(mask, None, iterations = 2) 
 		
 		# get square candidates
         candidates = getCandidates(mask)
-        
-        if(len(candidates) == 0):
+        if(len(candidates) == 0 or len(candidates) > 1):
             continue
-		
-		# verify which square (if any) is a target
-        target = verifyCandidates(candidates)
         
-		# mark image and save if target founf
+        target = candidates[0]
+        
+		# mark image and save if target found
         if(target is not None):
             found[color_name] = True
-			 
-		    # compute the center of the contour
+	       
+            # compute the center of the contour
             M = cv2.moments(target)
             cX = int((M["m10"] / M["m00"]))
             cY = int((M["m01"] / M["m00"]))
@@ -156,13 +148,41 @@ def objectDetect():
             tmp_image = copy.deepcopy(image) 
             cv2.drawContours(tmp_image, [target], -1, (0, 255, 0), 2)
             cv2.putText(tmp_image, color_name, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
-		
-            cv2.imwrite('images/' + color_name + '_found.jpg', tmp_image) 
+            
+            filename = None
+            if(path is None):
+                filename = color_name + '_found.jpg'
+            else:
+                tmp = path.split('/')
+                filename = color_name + '_found_' + tmp[-1]
+            cv2.imwrite('./detected/' + filename, tmp_image)
+            
 	
     return found['b'], found['r'], found['y']
 
+def testImages():
+    path = './test-flight'
+    
+    b_count = 0
+    r_count = 0
+    y_count = 0
+    
+    for filename in os.listdir(path):
+        ret = objectDetect(path + '/' + filename)
+        
+        if(ret[0] == True):
+            b_count += 1
+        if(ret[1] == True):
+            r_count += 1
+        if(ret[2] == True):
+            y_count += 1
+         
+    
+    print b_count, r_count, y_count
+            
 def main():
-    l = objectDetect()
+    testImages();
+    #l = objectDetect()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
