@@ -28,35 +28,102 @@ import cv2
 import time
 import copy
 import os
-#import picamera 
+from shutil import copyfile
 
-# Define color ranges for color recognition... in HSV
+# ***************************************************************
+#
+# Get image functions; changes depending on functionality
+# If PiCam is in use, the takePicture function will be used
+# If PiCam not in use, the openPicture function will be used
+#
+# A global function pointer is used to determine this; the pointer
+# is set based on the success of importing the PiCam library. If
+# the PiCam library is available, the takePicture function will be 
+# used. Otherwise, the openPicture function is used
+#
+# ***************************************************************
+
+###################################################
+##
+## Take PiCam image and store it in image dir
+## TODO: Ensure image directory exists
+##
+###################################################
+def takePicture():
+    # open new pi cam instantiation
+    camera = picamera.PiCamera()
+    
+    # get picture
+    camera.capture('./images/still.jpg')
+    
+    #release resources
+    camera.close()
+    
+    return cv2.imread('./images/still.jpg'), 'still.jpg'
+    
+###################################################
+##
+## Read file from test_dir
+## test_dir = sys.argv[2]
+##
+## Should only be one file in test_dir... ever
+## TODO: Ensure only one file in test_dir
+## TODO: Ensure file is image
+##
+###################################################
+def openPicture():
+    # read file from test directory
+    filename =  os.listdir(test_dir)[0]
+    return cv2.imread(test_dir + filename), filename
+
+###################################################
+##
+## Decide which getImage function to use...
+## If import succeeds, use the takePicture function
+## Otherwise, use openPicture function
+##
+###################################################
+try:
+    import picamera
+    getImage = takePicture
+except ImportError:
+    getImage = openPicture
+
+
+# ***************************************************************
+#
+# Global variable definitions...
+#
+# color_ranges: HSV color ranges for target detection
+# test_dir: path for directory that contains test image
+# current_image: name of current image (regardless of picam
+#                                        or opened image)
+# detected_dir: stores detected images
+# ***************************************************************
 color_ranges = [
 		((100,100,100),(130,255,255), "b"),
 		((25,10,200),(100,100,255),"y"),
 		((150,100,100),(180,255,255),"r")]
+test_dir = ''
+current_image = None
+detected_dir = './detected/'
 
-# ==============================================================
-# Get still from pi cam and return
-# Currently a STUB
-# ==============================================================
-def getStill(path = None):
-    if(path is None):
-        # open new pi cam instant
-        camera = picamera.PiCamera()
-    
-        # get picture
-        camera.capture('images/still.jpg')
-    
-        #release resources
-        camera.close()
-    
-        return cv2.imread('images/still.jpg')
-        
-    else:
-        # use this if testing on laptop
-        return cv2.imread(path) 
-
+###################################################
+##
+## Use contour detection on HSV'd mask to find
+## square(ish) figures. 
+##
+## Use epsilon of 15% to allow
+## for distortion from angle/wind blowing tarp/etc
+## 
+## .85 <= AR <= 1.15 also allows for distortion from
+## said factors... shouldn't cause errors
+##
+## Basically look for contours with 4 data points
+## If aspect ratio fits, its probably a square
+##
+## TODO: Verify epsilon and AR range values
+###################################################
 def getCandidates(mask):
     candidates = []
 	
@@ -83,32 +150,62 @@ def getCandidates(mask):
 	
     return candidates
 
-# stub: need to do physics stuff]
-# update: is this shit even possible? 
+###################################################
+##
+## Use math/physics/science wizardry bullshit to 
+## somehow determine if what we are looking at
+## actually is a target. Still waiting on response
+## to see how best to do this/if it is even 
+## possible. This has proven to be a real pain 
+## in the ass. 
+###################################################
 def verifyCandidates(candidates):
     return candidates[0]
 
+###################################################
+##
+## Scan through the detected directory to see if
+## the targets have been found yet. Mark dict entry
+## to indicate found/not found
+##
+## TODO: Surely there is a better way to do this
+## TODO: Probably won't work when images have diff
+## name... Not sure
+###################################################
 def checkTargetsFound():
-	color_string = 'bry'
-	found = {}
+    color_string = 'bry'
+    found = {}
 	
 	# see if image already exists for target
-	for color in color_string:
-		# if image exists, mark as found
-		if(os.path.isfile('./detected/' + color + '_found.jpg')):
-			found[color] = True 
-		# otherwise, mark as false
-		else:
-			found[color] = False
-			
-	return found
+    for color in color_string:
+        found[color] = False
+        
+        # if image exists, mark as found
+        for filename in os.listdir(detected_dir):
+            if(color + '_found' in filename):
+                print 'found'
+                found[color] = True 
+                break
+                	
+    return found
 
-def objectDetect(path = None):
+
+###################################################
+##
+## (1) Get image
+## (2) Mask image based on HSV
+## (3) Contour detection for squares on mask
+## (4) Outline and label color on image if target
+## detected
+## (5) Save outlined image if target detected
+##
+###################################################
+def objectDetect():
 	# check which targets already found/set others to false 
     found = checkTargetsFound()
 	
 	# first, get image to process
-    image = getStill(path)
+    image, image_name = getImage()
 	
 	# resize, blur, and convert to hsv color space
     image = imutils.resize(image, 1200) 
@@ -149,26 +246,27 @@ def objectDetect(path = None):
             cv2.drawContours(tmp_image, [target], -1, (0, 255, 0), 2)
             cv2.putText(tmp_image, color_name, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
             
-            filename = None
-            if(path is None):
-                filename = color_name + '_found.jpg'
-            else:
-                tmp = path.split('/')
-                filename = color_name + '_found_' + tmp[-1]
-            cv2.imwrite('./detected/' + filename, tmp_image)
+            filename = color_name + '_found_' + image_name
+            cv2.imwrite(detected_dir + filename, tmp_image)
             
 	
     return found['b'], found['r'], found['y']
 
-def testImages():
-    path = './test-flight'
-    
+###################################################
+##
+## Target detect on list of images in some dir
+## 
+## Path is specified by sys.argv[3]
+###################################################
+def testImages(path):
     b_count = 0
     r_count = 0
     y_count = 0
     
     for filename in os.listdir(path):
-        ret = objectDetect(path + '/' + filename)
+        current_image = filename
+        copyfile(path + filename, test_dir + filename)
+        ret = objectDetect()
         
         if(ret[0] == True):
             b_count += 1
@@ -176,14 +274,35 @@ def testImages():
             r_count += 1
         if(ret[2] == True):
             y_count += 1
+        
+        os.remove(test_dir + filename)
          
     
     print b_count, r_count, y_count
             
 def main():
-    testImages();
-    #l = objectDetect()
-    cv2.destroyAllWindows()
+    # set test directory
+    global test_dir
+    
+    # second arg is test directory; holds images
+    test_dir = sys.argv[2]
+    
+    # if clean arg not true, clean relevant directories
+    if(sys.argv[1] != 'n'):
+        # clean test dir directory
+        for filename in os.listdir(test_dir):
+            os.remove(test_dir + filename)
+        
+        # clean detected directory
+        for filename in os.listdir('./detected/'):
+            os.remove('./detected/' + filename)
+    
+    # if path provided, test all files in path
+    if(len(sys.argv) > 3):
+        testImages(sys.argv[3])
+    else: # only test file in test directory
+        objectDetect() 
+  
 
 if __name__ == "__main__":
     main() 
