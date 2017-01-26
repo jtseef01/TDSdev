@@ -99,6 +99,7 @@ except ImportError:
 # current_image: name of current image (regardless of picam
 #                                        or opened image)
 # detected_dir: stores detected images
+# targ_found: string representing which targets have been found
 # ***************************************************************
 color_ranges = [
 		((100,100,100),(130,255,255), "b"),
@@ -107,6 +108,7 @@ color_ranges = [
 test_dir = ''
 current_image = None
 detected_dir = './detected/'
+targ_found = ''
 
 ###################################################
 ##
@@ -178,17 +180,12 @@ def checkTargetsFound():
 	
 	# see if image already exists for target
     for color in color_string:
-        found[color] = False
-        
-        # if image exists, mark as found
-        for filename in os.listdir(detected_dir):
-            if(color + '_found' in filename):
-                print 'found'
-                found[color] = True 
-                break
-                	
+        if color in targ_found:
+            found[color] = True
+        else:
+            found[color] = False
+        	
     return found
-
 
 ###################################################
 ##
@@ -201,7 +198,9 @@ def checkTargetsFound():
 ##
 ###################################################
 def objectDetect():
-	# check which targets already found/set others to false 
+    global targ_found
+    
+    # check which targets already found/set others to false 
     found = checkTargetsFound()
 	
 	# first, get image to process
@@ -215,7 +214,6 @@ def objectDetect():
     for (lower, upper, color_name) in color_ranges:
 		# skip if this color already found 
         if(found[color_name] is True):
-            
             continue
 		
         # mask image based on HSV color range
@@ -249,7 +247,8 @@ def objectDetect():
             filename = color_name + '_found_' + image_name
             cv2.imwrite(detected_dir + filename, tmp_image)
             
-	
+            targ_found += color_name
+            
     return found['b'], found['r'], found['y']
 
 ###################################################
@@ -259,6 +258,8 @@ def objectDetect():
 ## Path is specified by sys.argv[3]
 ###################################################
 def testImages(path):
+    global targ_found
+    
     b_count = 0
     r_count = 0
     y_count = 0
@@ -276,10 +277,22 @@ def testImages(path):
             y_count += 1
         
         os.remove(test_dir + filename)
-         
+        targ_found = ''
     
-    print b_count, r_count, y_count
-            
+    print 'blue detected in: ', b_count
+    print 'red detected in: ', r_count
+    print 'yellow detected in: ', y_count
+
+###################################################
+##
+## run as python tds-main.py arg1 arg2 arg3
+## arg1: clean directories or not
+##       anything but 'n' cleans directories
+## arg2: directory to place test images into
+##       this directory should be empty
+## arg3: directory to read test images from (option)
+##       use this if wanted to test more than 1 pic
+###################################################          
 def main():
     # set test directory
     global test_dir
