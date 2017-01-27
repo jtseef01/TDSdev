@@ -30,7 +30,8 @@ rm opencv_contrib.zip
 wget -nc https://bootstrap.pypa.io/get-pip.py
 sudo python get-pip.py
 
-pip install numpy
+sudo pip install numpy
+sudo pip install imutils
 
 cd ~/opencv-3.1.0/
 
