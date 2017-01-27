@@ -29,6 +29,7 @@ import time
 import copy
 import os
 from shutil import copyfile
+import time
 
 # ***************************************************************
 #
@@ -54,12 +55,14 @@ def takePicture():
     camera = picamera.PiCamera()
     
     # get picture
-    camera.capture('./images/still.jpg')
+    ts = time.time()
+    name = './images/' + str(ts) +'.jpg'
+    camera.capture(name)
     
     #release resources
     camera.close()
     
-    return cv2.imread('./images/still.jpg'), 'still.jpg'
+    return cv2.imread('./images/still.jpg'), name
     
 ###################################################
 ##
