@@ -14,6 +14,7 @@ fi
 counter=0
 date=$(date +"%Y-%m-%d_%H%M")
 
+
 while [ $counter -gt -1 ]; do
 	python test-script.py
 done

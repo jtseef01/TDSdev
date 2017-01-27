@@ -1,3 +1,0 @@
-import tdsmain 
-
-tdsmain.objectDetect()
