@@ -56,13 +56,15 @@ def takePicture():
     
     # get picture
     ts = time.time()
-    name = './images/' + str(ts) +'.jpg'
+
+    name = './images/' + str(int(ts)) +'.jpg'
+    
     camera.capture(name)
     
     #release resources
     camera.close()
     
-    return cv2.imread('./images/still.jpg'), name
+    return cv2.imread('./images/still.jpg'), name.split('/')[2]
     
 ###################################################
 ##
@@ -90,7 +92,7 @@ try:
     import picamera
     getImage = takePicture
 except ImportError:
-    getImage = openPicture
+    getImage = takePicture
 
 
 # ***************************************************************
@@ -251,7 +253,6 @@ def objectDetect():
             cv2.imwrite(detected_dir + filename, tmp_image)
             
             targ_found += color_name
-            
     return found['b'], found['r'], found['y']
 
 ###################################################

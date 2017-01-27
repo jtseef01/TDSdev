@@ -1,7 +1,11 @@
 #!/bin/bash
 
-if [! -d "/home/pi/camera-test" ]; then
-mkdir /home/pi/camera-test
+if [ ! -d "/home/pi/images" ]; then
+mkdir /home/pi/images
+fi
+
+if [ ! -d "/home/pi/detected" ]; then
+mkdir /home/pi/detected
 fi
 
 # Easy Cleaning
@@ -10,10 +14,6 @@ fi
 counter=0
 date=$(date +"%Y-%m-%d_%H%M")
 
-while [ $counter -lt 1001 ]; do
-	raspistill -vf -hf -vs -q 100 -n -o /home/pi/camera-test/$date-$counter.jpg
-	echo "Catpure "$date"-"$counter
-	let counter=counter+1
+while [ $counter -gt -1 ]; do
+	python test-script.py
 done
-
-echo "Done."
