@@ -29,7 +29,6 @@ import time
 import copy
 import os
 from shutil import copyfile
-import time
 
 # ***************************************************************
 #
@@ -52,7 +51,15 @@ import time
 ###################################################
 def takePicture():
     # open new pi cam instantiation
-    camera = picamera.PiCamera()
+    camera = picamera.PiCamera(resolution=(1920,1080))
+    camera.iso = 150
+    time.sleep(2)
+    camera.shutter_speed = camera.exposure_speed
+    camera.exposure_mode = 'off'
+    g = camera.awb_gains
+    camera.awb_mode = 'off'
+    camera.awb_gains = g
+    
     
     # get picture
     ts = time.time()
@@ -64,7 +71,7 @@ def takePicture():
     #release resources
     camera.close()
     
-    return cv2.imread('./images/still.jpg'), name.split('/')[2]
+    return cv2.imread(name), name.split('/')[2]
     
 ###################################################
 ##
