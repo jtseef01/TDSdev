@@ -59,6 +59,8 @@ def takePicture():
     g = camera.awb_gains
     camera.awb_mode = 'off'
     camera.awb_gains = g
+    camera.hflip = True
+    camera.vflip = True
     
     
     # get picture

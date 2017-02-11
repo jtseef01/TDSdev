@@ -1,5 +1,7 @@
 #!/bin/bash
 
+sleep 60s
+
 if [ ! -d "/home/pi/images" ]; then
 mkdir /home/pi/images
 fi
