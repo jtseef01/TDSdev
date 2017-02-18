@@ -1,3 +1,3 @@
-from TDSdev import tdsmain 
+from TDSdev import tdsmain
 
-tdsmain.objectDetect()
+tdsmain.takePicture()
