@@ -2,12 +2,12 @@
 
 sleep 60s
 
-if [ ! -d "/home/pi/images" ]; then
-mkdir /home/pi/images
+if [ ! -d "$PWD/images" ]; then
+mkdir $PWD/images
 fi
 
-if [ ! -d "/home/pi/detected" ]; then
-mkdir /home/pi/detected
+if [ ! -d "$PWD/detected" ]; then
+mkdir $PWD/detected
 fi
 
 # Easy Cleaning
