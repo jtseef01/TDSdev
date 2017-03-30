@@ -20,8 +20,11 @@
 # The square detection portion is found here: 
 # http://www.pyimagesearch.com/2016/02/08/opencv-shape-detection/
 #
+# Dimension verification based on this website:
+# http://www.pyimagesearch.com/2015/01/19/find-distance-camera-objectmarker-using-python-opencv/
 # ===============================================================
 
+#import picam
 import imutils
 import sys
 import cv2
@@ -29,80 +32,6 @@ import time
 import copy
 import os
 from shutil import copyfile
-
-# ***************************************************************
-#
-# Get image functions; changes depending on functionality
-# If PiCam is in use, the takePicture function will be used
-# If PiCam not in use, the openPicture function will be used
-#
-# A global function pointer is used to determine this; the pointer
-# is set based on the success of importing the PiCam library. If
-# the PiCam library is available, the takePicture function will be 
-# used. Otherwise, the openPicture function is used
-#
-# ***************************************************************
-
-###################################################
-##
-## Take PiCam image and store it in image dir
-## TODO: Ensure image directory exists
-##
-###################################################
-def takePicture():
-    # open new pi cam instantiation
-    camera = picamera.PiCamera(resolution=(1920,1080))
-    camera.iso = 150
-    time.sleep(2)
-    camera.shutter_speed = camera.exposure_speed
-    camera.exposure_mode = 'off'
-    g = camera.awb_gains
-    camera.awb_mode = 'off'
-    camera.awb_gains = g
-    camera.hflip = True
-    camera.vflip = True
-    
-    
-    # get picture
-    ts = time.time()
-
-    name = './images/' + str(int(ts)) +'.jpg'
-    
-    camera.capture(name)
-    
-    #release resources
-    camera.close()
-    
-    return cv2.imread(name), name.split('/')[2]
-    
-###################################################
-##
-## Read file from test_dir
-## test_dir = sys.argv[2]
-##
-## Should only be one file in test_dir... ever
-## TODO: Ensure only one file in test_dir
-## TODO: Ensure file is image
-##
-###################################################
-def openPicture():
-    # read file from test directory
-    filename =  os.listdir(test_dir)[0]
-    return cv2.imread(test_dir + filename), filename
-
-###################################################
-##
-## Decide which getImage function to use...
-## If import succeeds, use the takePicture function
-## Otherwise, use openPicture function
-##
-###################################################
-try:
-    import picamera
-    getImage = takePicture
-except ImportError:
-    getImage = takePicture
-
 
 # ***************************************************************
 #
@@ -119,10 +48,41 @@ color_ranges = [
 		((100,100,100),(130,255,255), "b"),
 		((25,10,200),(100,100,255),"y"),
 		((150,100,100),(180,255,255),"r")]
-test_dir = ''
-current_image = None
-detected_dir = './detected/'
-targ_found = ''
+
+FOCAL_LEN = 1190
+TARG_WIDTH_FT = 20
+IMAGE_DIR = './test-image/'
+DETECTED_DIR = './detected/'
+
+###################################################
+##
+## Take PiCam image and store it in image dir
+##
+###################################################
+def takePicture():
+    # open new pi cam instantiation
+    '''camera = picamera.PiCamera(resolution=(1920,1080))
+    camera.iso = 150
+    time.sleep(2)
+    camera.shutter_speed = camera.exposure_speed
+    camera.exposure_mode = 'off'
+    g = camera.awb_gains
+    camera.awb_mode = 'off'
+    camera.awb_gains = g
+    camera.hflip = True
+    camera.vflip = True
+    
+    # get time for time stamp
+    ts = time.time()
+    name = str(int(ts)) +'.jpg'
+    camera.capture(name)
+    
+    #release resources
+    camera.close()
+    ''' 
+    
+    return cv2.imread(IMAGE_DIR + 'test.jpg'), 'test.jpg'
+    #return cv2.imread(IMAGE_DIR + name), name
 
 ###################################################
 ##
@@ -138,7 +98,6 @@ targ_found = ''
 ## Basically look for contours with 4 data points
 ## If aspect ratio fits, its probably a square
 ##
-## TODO: Verify epsilon and AR range values
 ###################################################
 def getCandidates(mask):
     candidates = []
@@ -175,32 +134,28 @@ def getCandidates(mask):
 ## possible. This has proven to be a real pain 
 ## in the ass. 
 ###################################################
-def verifyCandidates(candidates):
-    return candidates[0]
-
-###################################################
-##
-## Scan through the detected directory to see if
-## the targets have been found yet. Mark dict entry
-## to indicate found/not found
-##
-## TODO: Surely there is a better way to do this
-## TODO: Probably won't work when images have diff
-## name... Not sure
-###################################################
-def checkTargetsFound():
-    color_string = 'bry'
-    found = {}
-	
-	# see if image already exists for target
-    for color in color_string:
-        if color in targ_found:
-            found[color] = True
-        else:
-            found[color] = False
-        	
-    return found
-
+def verifyCandidates(altitude, candidates):
+    possible_candidates = []
+    
+    for candidate in candidates:
+        # get bounding rectngle
+        rect = cv2.minAreaRect(candidate)
+        
+        # average the sides of rectangle
+        avg = (rect[1][0] + rect[1][1]) / 2
+        
+        # get width 
+        w = (avg * (altitude * 39.37)) / FOCAL_LEN
+        
+        # convert to feet 
+        w = w / 12
+        
+        # verify within 15% of actual target dimensions 
+        if(w < (TARG_WIDTH_FT * 1.15) and w > (TARG_WIDTH_FT * .85)):
+            possible_candidates.append(candidate) 
+        
+    return possible_candidates 
+    
 ###################################################
 ##
 ## (1) Get image
@@ -211,14 +166,17 @@ def checkTargetsFound():
 ## (5) Save outlined image if target detected
 ##
 ###################################################
-def objectDetect():
-    global targ_found
+def objectDetect(altitude, look_for):
+    found = ''
     
-    # check which targets already found/set others to false 
-    found = checkTargetsFound()
-	
-	# first, get image to process
-    image, image_name = getImage()
+    # first, make sure detected and images directories exist
+    if(not os.path.isdir(IMAGE_DIR)):
+        os.makedirs(IMAGE_DIR)
+    if(not os.path.isdir(DETECTED_DIR)):
+        os.makedirs(DETECTED_DIR)
+        
+    # get image to process
+    image, image_name = takePicture()
 	
 	# resize, blur, and convert to hsv color space
     image = imutils.resize(image, 1200) 
@@ -226,8 +184,8 @@ def objectDetect():
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
     for (lower, upper, color_name) in color_ranges:
-		# skip if this color already found 
-        if(found[color_name] is True):
+		# skip if color not requested 
+        if(color_name not in look_for):
             continue
 		
         # mask image based on HSV color range
@@ -239,95 +197,36 @@ def objectDetect():
 		
 		# get square candidates
         candidates = getCandidates(mask)
-        if(len(candidates) == 0 or len(candidates) > 1):
+        if(len(candidates) == 0):
             continue
         
-        target = candidates[0]
+        # verify candidate dimensions
+        ver_candidates = verifyCandidates(altitude, candidates)
+        if(len(ver_candidates) == 0 or len(ver_candidates) > 1):
+            continue
         
-		# mark image and save if target found
-        if(target is not None):
-            found[color_name] = True
-	       
-            # compute the center of the contour
-            M = cv2.moments(target)
-            cX = int((M["m10"] / M["m00"]))
-            cY = int((M["m01"] / M["m00"]))
+        target = ver_candidates[0]
+        
+        # compute the center of the contour
+        M = cv2.moments(target)
+        cX = int((M["m10"] / M["m00"]))
+        cY = int((M["m01"] / M["m00"]))
 			
-		    # save copy of image with target detected
-            tmp_image = copy.deepcopy(image) 
-            cv2.drawContours(tmp_image, [target], -1, (0, 255, 0), 2)
-            cv2.putText(tmp_image, color_name, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+        # save copy of image with target detected
+        tmp_image = copy.deepcopy(image) 
+        cv2.drawContours(tmp_image, [target], -1, (0, 255, 0), 2)
+        cv2.putText(tmp_image, color_name, (cX,cY), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
             
-            filename = color_name + '_found_' + image_name
-            cv2.imwrite(detected_dir + filename, tmp_image)
+        filename = color_name + '_found_' + image_name
+        cv2.imwrite(DETECTED_DIR + filename, tmp_image)
+        
+        found += color_name
             
-            targ_found += color_name
-    return found['b'], found['r'], found['y']
-
-###################################################
-##
-## Target detect on list of images in some dir
-## 
-## Path is specified by sys.argv[3]
-###################################################
-def testImages(path):
-    global targ_found
-    
-    b_count = 0
-    r_count = 0
-    y_count = 0
-    
-    for filename in os.listdir(path):
-        current_image = filename
-        copyfile(path + filename, test_dir + filename)
-        ret = objectDetect()
+    return found
         
-        if(ret[0] == True):
-            b_count += 1
-        if(ret[1] == True):
-            r_count += 1
-        if(ret[2] == True):
-            y_count += 1
-        
-        os.remove(test_dir + filename)
-        targ_found = ''
-    
-    print 'blue detected in: ', b_count
-    print 'red detected in: ', r_count
-    print 'yellow detected in: ', y_count
-
-###################################################
-##
-## run as python tds-main.py arg1 arg2 arg3
-## arg1: clean directories or not
-##       anything but 'n' cleans directories
-## arg2: directory to place test images into
-##       this directory should be empty
-## arg3: directory to read test images from (option)
-##       use this if wanted to test more than 1 pic
-###################################################          
 def main():
-    # set test directory
-    global test_dir
-    
-    # second arg is test directory; holds images
-    test_dir = sys.argv[2]
-    
-    # if clean arg not true, clean relevant directories
-    if(sys.argv[1] != 'n'):
-        # clean test dir directory
-        for filename in os.listdir(test_dir):
-            os.remove(test_dir + filename)
-        
-        # clean detected directory
-        for filename in os.listdir('./detected/'):
-            os.remove('./detected/' + filename)
-    
-    # if path provided, test all files in path
-    if(len(sys.argv) > 3):
-        testImages(sys.argv[3])
-    else: # only test file in test directory
-        objectDetect() 
+    altitude = 93.57
+    objectDetect(altitude, 'bry')
   
 
 if __name__ == "__main__":
