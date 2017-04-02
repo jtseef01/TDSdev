@@ -24,7 +24,7 @@
 # http://www.pyimagesearch.com/2015/01/19/find-distance-camera-objectmarker-using-python-opencv/
 # ===============================================================
 
-#import picam
+import picam
 import imutils
 import sys
 import cv2
@@ -47,12 +47,11 @@ from shutil import copyfile
 color_ranges = [
 		((95,38,120),(130,255,255), "b"),
 		((22,38,180),(40,255,255),"y"),
-        ((0,38,190),(5,255,255),"r"),
         ((160,38,175),(180,255,255),"r")]
 
 FOCAL_LEN = 1190
-TARG_WIDTH_FT = 20
-IMAGE_DIR = './test-image/'
+TARG_WIDTH_FT = 40
+IMAGE_DIR = './images/'
 DETECTED_DIR = './detected/'
 
 ###################################################
@@ -62,7 +61,7 @@ DETECTED_DIR = './detected/'
 ###################################################
 def takePicture():
     # open new pi cam instantiation
-    '''camera = picamera.PiCamera(resolution=(1920,1080))
+    camera = picamera.PiCamera(resolution=(1920,1080))
     camera.iso = 150
     time.sleep(2)
     camera.shutter_speed = camera.exposure_speed
@@ -80,10 +79,8 @@ def takePicture():
 
     #release resources
     camera.close()
-    '''
 
-    return cv2.imread(IMAGE_DIR + 'test.jpg'), 'test.jpg'
-    #return cv2.imread(IMAGE_DIR + name), name
+    return cv2.imread(IMAGE_DIR + name), name
 
 ###################################################
 ##
@@ -224,11 +221,3 @@ def objectDetect(altitude, look_for):
         found += color_name
 
     return found
-
-def main():
-    altitude = 93.57
-    objectDetect(altitude, 'bry')
-
-
-if __name__ == "__main__":
-    main()
