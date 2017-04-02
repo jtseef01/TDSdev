@@ -24,7 +24,7 @@
 # http://www.pyimagesearch.com/2015/01/19/find-distance-camera-objectmarker-using-python-opencv/
 # ===============================================================
 
-import picam
+import picamera
 import imutils
 import sys
 import cv2
@@ -75,7 +75,7 @@ def takePicture():
     # get time for time stamp
     ts = time.time()
     name = str(int(ts)) +'.jpg'
-    camera.capture(name)
+    camera.capture(IMAGE_DIR + name)
 
     #release resources
     camera.close()
